@@ -618,6 +618,40 @@ describe Grape::Validations::ParamsScope do
       expect(last_response.status).to eq(200)
     end
 
+    it 'allows nested requires to reuse param names' do
+      subject.params do
+        requires :a, type: String, allow_blank: false, values: %w[x y z]
+        given a: ->(val) { val == 'x' } do
+          requires :inner, type: Hash do
+            requires :foo, type: Integer
+          end
+        end
+        given a: ->(val) { val == 'y' } do
+          requires :inner, type: Hash do
+            requires :bar, type: Integer
+          end
+        end
+        # FIXME: Spec fails without this block
+        given a: ->(val) { val == 'z' } do
+          requires :inner, type: Integer
+        end
+      end
+      subject.get('/varying') { declared(params).to_json }
+
+      # FIXME: Raises NoMethodError
+      # get '/varying', a: 'z', inner: 1
+      # expect(last_response.status).to eq(200)
+      # expect(JSON.parse(last_response.body)).to eq('a' => 'z', 'inner' => {'baz' => 1})
+
+      get '/varying', a: 'y', inner: { bar: 2 }
+      expect(last_response.status).to eq(200)
+      expect(JSON.parse(last_response.body)).to eq('a' => 'y', 'inner' => {'bar' => 2})
+
+      get '/varying', a: 'x', inner: { foo: 3 }
+      expect(last_response.status).to eq(200)
+      expect(JSON.parse(last_response.body)).to eq('a' => 'x', 'inner' => {'foo' => 3})
+    end
+
     it 'includes the parameter within #declared(params)' do
       get '/test', a: true, b: true
 
